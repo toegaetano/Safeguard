@@ -1,0 +1,9 @@
+{
+  "name": "safeguard-cleaning-website",
+  "private": true,
+  "type": "module",
+  "description": "Safeguard Cleaning website: static pages in public/, quote form server in functions/ (Cloudflare Pages).",
+  "scripts": {
+    "test": "node --no-warnings --test tests/*.test.js"
+  }
+}
