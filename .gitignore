@@ -1,0 +1,18 @@
+# Private: never publish (this repo is public).
+# docs/business.md lists internal team names; CLAUDE.md has a personal email.
+docs/
+CLAUDE.md
+.claude/
+
+# Design-check working files (screenshots, measurements, photo search results)
+.taste-skill/
+public/.taste-skill/
+
+# Local and system files
+node_modules/
+.wrangler/
+.dev.vars
+.env*
+*.log
+Thumbs.db
+.DS_Store

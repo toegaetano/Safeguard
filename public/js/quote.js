@@ -8,25 +8,10 @@
   var done = document.getElementById('done');
   if (!step1) return;
 
-  var kind = 'commercial';
   var leadToken = null;
   var widgetId = null;
   var turnstileReady = false;
   var FALLBACK = ' You can also email us at safeguardcleaningco@gmail.com.';
-
-  // ----- Business / home toggle -----
-  var businessField = document.querySelector('[data-business-field]');
-  document.querySelectorAll('[data-kind]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      kind = btn.getAttribute('data-kind');
-      document.querySelectorAll('[data-kind]').forEach(function (b) {
-        b.setAttribute('aria-pressed', String(b === btn));
-      });
-      businessField.hidden = kind !== 'commercial';
-      document.getElementById('businessName').required = kind === 'commercial';
-      setError('businessName', '');
-    });
-  });
 
   // ----- Spam check (Turnstile) -----
   window.sgTurnstileReady = function () {
@@ -71,7 +56,7 @@
   function validateStep1() {
     var errors = {};
     if (!val('name')) errors.name = 'Please enter your name.';
-    if (kind === 'commercial' && !val('businessName')) errors.businessName = 'Please enter your business name.';
+    if (!val('businessName')) errors.businessName = 'Please enter your business name.';
     if (!EMAIL_RE.test(val('email'))) errors.email = 'Please enter a valid email address.';
     if (val('phone').replace(/\D/g, '').length < 10) errors.phone = 'Please enter a phone number we can reach you at.';
     if (!val('city')) errors.city = 'Please enter your city.';
@@ -120,9 +105,8 @@
     busy(step1, true, 'Sending…');
     post({
       step: 1,
-      serviceType: kind,
       name: val('name'),
-      businessName: kind === 'commercial' ? val('businessName') : '',
+      businessName: val('businessName'),
       email: val('email'),
       phone: val('phone'),
       city: val('city'),

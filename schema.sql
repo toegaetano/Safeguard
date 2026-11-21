@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS leads (
   last_activity_at TEXT NOT NULL DEFAULT (datetime('now')),
   status TEXT NOT NULL DEFAULT 'new',          -- new, contacted, walkthrough_scheduled, quote_sent, won, lost
   lost_reason TEXT,
-  service_type TEXT NOT NULL,                  -- commercial or residential
+  service_type TEXT NOT NULL,                  -- always 'commercial' (residential dropped 2026-11-21)
   name TEXT NOT NULL,
   business_name TEXT,
   email TEXT NOT NULL,

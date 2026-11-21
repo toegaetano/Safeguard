@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { handleQuote, escapeHtml, RATE_LIMIT_PER_HOUR } from '../lib/quote-core.js';
+import { handleQuote, escapeHtml, validateStep2, RATE_LIMIT_PER_HOUR } from '../lib/quote-core.js';
 
 const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
 
@@ -96,11 +96,19 @@ test('missing or invalid fields return errors under each field and save nothing'
   assert.equal(f.calls.length, 0, 'no spam check or email for invalid input');
 });
 
-test('residential requests do not need a business name', async () => {
+test('businesses only: a "residential" request still needs a business name and is saved as commercial', async () => {
   const db = makeD1(); const f = makeFetch();
-  const res = await handleQuote(req({ ...good, serviceType: 'residential', businessName: '' }), env(db), { fetch: f });
-  assert.equal(res.status, 200);
-  assert.equal(db.raw.prepare('SELECT service_type FROM leads').get().service_type, 'residential');
+  const bad = await handleQuote(req({ ...good, serviceType: 'residential', businessName: '' }), env(db), { fetch: f });
+  assert.equal(bad.status, 400);
+  assert.ok((await bad.json()).errors.businessName);
+  const ok = await handleQuote(req({ ...good, serviceType: 'residential' }), env(db), { fetch: f });
+  assert.equal(ok.status, 200);
+  assert.equal(db.raw.prepare('SELECT service_type FROM leads').get().service_type, 'commercial');
+});
+
+test('"Home" is no longer an accepted facility type', () => {
+  assert.equal(validateStep2({ facilityType: 'Home' }).facilityType, '');
+  assert.equal(validateStep2({ facilityType: 'Office' }).facilityType, 'Office');
 });
 
 test('spam trap filled: pretends success, saves and sends nothing', async () => {
