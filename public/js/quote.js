@@ -1,5 +1,6 @@
 // Safeguard Cleaning — quote form. Two steps: required contact details, then optional details.
-// Sends to /api/quote (functions/api/quote.js). Spam check: Cloudflare Turnstile + hidden trap field.
+// Sends to /api/quote (functions/api/quote.js). Spam check: a hidden trap field, plus Cloudflare Turnstile
+// when it is set up (/api/config says so).
 (function () {
   'use strict';
 
@@ -19,11 +20,15 @@
     renderTurnstile();
   };
   var siteKey = null;
+  var formReady = false;
+  var turnstileBox = document.getElementById('turnstile');
   fetch('/api/config', { headers: { Accept: 'application/json' } })
     .then(function (r) { return r.ok ? r.json() : {}; })
     .then(function (cfg) {
+      formReady = !!(cfg && cfg.formReady);
       siteKey = cfg && cfg.turnstileSiteKey;
-      if (!siteKey) return;
+      // No spam check set up: the hidden trap field still guards the form, so hide the empty box.
+      if (!siteKey) { if (turnstileBox) turnstileBox.hidden = true; return; }
       var s = document.createElement('script');
       s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=sgTurnstileReady';
       s.async = true; s.defer = true;
@@ -98,9 +103,9 @@
     showErrors(errors);
     if (Object.keys(errors).length) return;
 
-    if (!siteKey) { alert1.textContent = 'Sorry, the form is not available right now.' + FALLBACK; return; }
-    var token = turnstileToken();
-    if (!token) { alert1.textContent = 'Please wait a moment for the spam check to finish, then try again.'; return; }
+    if (!formReady) { alert1.textContent = 'Sorry, the form is not available right now.' + FALLBACK; return; }
+    var token = siteKey ? turnstileToken() : '';
+    if (siteKey && !token) { alert1.textContent = 'Please wait a moment for the spam check to finish, then try again.'; return; }
 
     busy(step1, true, 'Sending…');
     post({
