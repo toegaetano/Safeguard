@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { handleQuote, escapeHtml, validateStep2, formConfig, signToken, RATE_LIMIT_PER_HOUR } from '../lib/quote-core.js';
+import { handleQuote, escapeHtml, validateStep2, formConfig, signToken, telHref, cameFrom, RATE_LIMIT_PER_HOUR } from '../lib/quote-core.js';
 
 const schema = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
 
@@ -55,7 +55,15 @@ const good = {
   turnstileToken: 'tok', source: { landingPage: '/', referrer: 'https://www.google.com/', utmSource: '' }
 };
 
-test('valid step 1 saves the lead, emails the team, returns a token', async () => {
+// Step 1 then step 2, the way a visitor sends one inquiry. Returns the step-2 response.
+async function inquiry(e, f, details = {}, body = good) {
+  const r1 = await handleQuote(req(body), e, { fetch: f });
+  const { token } = await r1.json();
+  return handleQuote(req({ step: 2, token, details }), e, { fetch: f });
+}
+const resendCalls = (f) => f.calls.filter((c) => c.url.includes('resend')).map((c) => JSON.parse(c.init.body));
+
+test('valid step 1 saves the lead and returns a token, but sends no email yet', async () => {
   const db = makeD1(); const f = makeFetch();
   const res = await handleQuote(req(good), env(db), { fetch: f });
   assert.equal(res.status, 200);
@@ -67,23 +75,30 @@ test('valid step 1 saves the lead, emails the team, returns a token', async () =
   assert.equal(row.name, 'Dana Smith');
   assert.equal(row.email, 'dana@example.com');
   assert.equal(row.business_name, 'Smith Dental');
-  assert.equal(row.notification_status, 'sent');
+  assert.equal(row.notification_status, 'pending');
   assert.equal(row.referrer, 'https://www.google.com/');
   assert.ok(row.ip_hash && !row.ip_hash.includes('203.0.113.7'), 'IP is stored hashed only');
+  assert.equal(resendCalls(f).length, 0);
+});
 
-  const email = f.calls.find((c) => c.url.includes('resend'));
-  const sent = JSON.parse(email.init.body);
+test('one inquiry sends exactly one team email, after step 2', async () => {
+  const db = makeD1(); const f = makeFetch();
+  const r2 = await inquiry(env(db), f, { facilityType: 'Office' });
+  assert.equal(r2.status, 200);
+  const mails = f.calls.filter((c) => c.url.includes('resend'));
+  assert.equal(mails.length, 1);
+  const sent = JSON.parse(mails[0].init.body);
   assert.deepEqual(sent.to, ['safeguardcleaningco@gmail.com']);
   assert.equal(sent.reply_to, 'dana@example.com');
   assert.equal(sent.subject, 'Website quote request: Smith Dental (Independence)');
-  assert.equal(email.init.headers.Authorization, 'Bearer re_test');
+  assert.equal(mails[0].init.headers.Authorization, 'Bearer re_test');
+  assert.equal(db.raw.prepare('SELECT notification_status FROM leads').get().notification_status, 'sent');
 });
 
 test('alert goes to every address in LEAD_ALERT_TO', async () => {
   const db = makeD1(); const f = makeFetch();
-  await handleQuote(req(good), env(db, { LEAD_ALERT_TO: 'a@x.com, b@x.com,c@x.com' }), { fetch: f });
-  const sent = JSON.parse(f.calls.find((c) => c.url.includes('resend')).init.body);
-  assert.deepEqual(sent.to, ['a@x.com', 'b@x.com', 'c@x.com']);
+  await inquiry(env(db, { LEAD_ALERT_TO: 'a@x.com, b@x.com,c@x.com' }), f);
+  assert.deepEqual(resendCalls(f)[0].to, ['a@x.com', 'b@x.com', 'c@x.com']);
 });
 
 test('missing or invalid fields return errors under each field and save nothing', async () => {
@@ -146,9 +161,9 @@ test(`rate limit: request ${RATE_LIMIT_PER_HOUR + 1} from one address within an 
   assert.equal(other.status, 200, 'other visitors are unaffected');
 });
 
-test('email failure still keeps the lead and tells the visitor it worked', async () => {
+test('with a database, an email failure keeps the lead and tells the visitor it worked', async () => {
   const db = makeD1(); const f = makeFetch({ resendStatus: 500 });
-  const res = await handleQuote(req(good), env(db), { fetch: f });
+  const res = await inquiry(env(db), f);
   assert.equal(res.status, 200);
   const row = db.raw.prepare('SELECT notification_status FROM leads').get();
   assert.equal(row.notification_status, 'failed');
@@ -158,7 +173,7 @@ test('email failure still keeps the lead and tells the visitor it worked', async
 
 test('no email key yet: lead is saved and marked skipped', async () => {
   const db = makeD1(); const f = makeFetch();
-  const res = await handleQuote(req(good), env(db, { RESEND_API_KEY: '' }), { fetch: f });
+  const res = await inquiry(env(db, { RESEND_API_KEY: '' }), f);
   assert.equal(res.status, 200);
   assert.equal(db.raw.prepare('SELECT notification_status FROM leads').get().notification_status, 'skipped');
 });
@@ -166,12 +181,12 @@ test('no email key yet: lead is saved and marked skipped', async () => {
 test('customer confirmation is only sent when switched on', async () => {
   const db = makeD1(); const f = makeFetch();
   await handleQuote(req(good), env(db), { fetch: f });
-  assert.equal(f.calls.filter((c) => c.url.includes('resend')).length, 1);
+  assert.equal(resendCalls(f).length, 0);
   const f2 = makeFetch();
   await handleQuote(req(good, { ip: '198.51.100.1' }), env(db, { SEND_CUSTOMER_CONFIRMATION: 'true' }), { fetch: f2 });
-  const mails = f2.calls.filter((c) => c.url.includes('resend')).map((c) => JSON.parse(c.init.body));
-  assert.equal(mails.length, 2);
-  assert.deepEqual(mails[1].to, ['dana@example.com']);
+  const mails = resendCalls(f2);
+  assert.equal(mails.length, 1);
+  assert.deepEqual(mails[0].to, ['dana@example.com']);
 });
 
 test('step 2 saves allowed details once, emails the team, and the token stops working', async () => {
@@ -185,9 +200,12 @@ test('step 2 saves allowed details once, emails the team, and the token stops wo
   assert.equal(row.facility_type, 'Office');
   assert.equal(row.notes, 'Front lobby needs extra care.');
   assert.equal(row.step2_token, null);
-  const mails = f.calls.filter((c) => c.url.includes('resend'));
-  assert.equal(mails.length, 2);
-  assert.equal(JSON.parse(mails[1].init.body).subject, 'Website quote request, more details: Smith Dental (Independence)');
+  const mails = resendCalls(f);
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].subject, 'Website quote request: Smith Dental (Independence)');
+  for (const v of ['Office', '5,000–10,000 sq ft', 'Weekly', 'Tue, Dec 1, 2026', 'Front lobby needs extra care.', 'Lead #1', 'Google']) {
+    assert.ok(mails[0].text.includes(v), `text has ${v}`);
+  }
 
   const again = await handleQuote(req({ step: 2, token, details }), env(db), { fetch: f });
   assert.equal(again.status, 404, 'token can only be used once');
@@ -225,17 +243,25 @@ test('missing setup is reported as a server error, not a crash', async () => {
   assert.equal(f.calls.length, 0);
 });
 
-test('names with HTML are escaped in the team email', async () => {
+test('names and notes with HTML are escaped in the team email', async () => {
   const db = makeD1(); const f = makeFetch();
-  await handleQuote(req({ ...good, name: '<script>alert(1)</script>' }), env(db), { fetch: f });
-  const html = JSON.parse(f.calls.find((c) => c.url.includes('resend')).init.body).html;
+  await inquiry(env(db), f, { notes: '<img src=x onerror=alert(1)>' }, { ...good, name: '<script>alert(1)</script>' });
+  const html = resendCalls(f)[0].html;
   assert.ok(!html.includes('<script>'));
+  assert.ok(!html.includes('<img src=x'));
   assert.ok(html.includes(escapeHtml('<script>')));
+});
+
+test('tap-to-call links and "how they found us" read plainly', () => {
+  assert.equal(telHref('(816) 555-0142'), 'tel:+18165550142');
+  assert.equal(telHref('1-816-555-0142'), 'tel:+18165550142');
+  assert.equal(cameFrom({ referrer: 'https://www.google.com/' }), 'Google');
+  assert.equal(cameFrom({ utmSource: 'flyer', utmCampaign: 'spring' }), 'flyer / spring');
+  assert.equal(cameFrom({}), 'Typed the address or a saved link');
 });
 
 // ----- Email-only setup: just RESEND_API_KEY (no database, no spam check) -----
 const emailOnly = (extra = {}) => ({ RESEND_API_KEY: 're_test', ...extra });
-const resendCalls = (f) => f.calls.filter((c) => c.url.includes('resend')).map((c) => JSON.parse(c.init.body));
 
 test('email-only: the form reports ready with just the email key; nothing set up reports not ready', () => {
   assert.deepEqual(formConfig(emailOnly()), { formReady: true, turnstileSiteKey: null });
@@ -244,46 +270,48 @@ test('email-only: the form reports ready with just the email key; nothing set up
   assert.equal(formConfig({ RESEND_API_KEY: 'k', TURNSTILE_SITE_KEY: 'site', TURNSTILE_SECRET_KEY: 's' }).turnstileSiteKey, 'site');
 });
 
-test('email-only: step 1 emails everything the customer typed, with a clear website subject', async () => {
+test('email-only: step 1 checks the visitor and returns a signed token, without emailing', async () => {
   const f = makeFetch();
   const res = await handleQuote(req({ ...good, turnstileToken: '' }), emailOnly(), { fetch: f });
   assert.equal(res.status, 200);
   const { ok, token } = await res.json();
   assert.equal(ok, true);
   assert.ok(token && token.includes('.'), 'a signed token for step 2');
-  assert.equal(f.calls.filter((c) => c.url.includes('turnstile')).length, 0, 'no spam-check call when it is not set up');
-  const [mail] = resendCalls(f);
+  assert.equal(f.calls.length, 0, 'no spam-check call (not set up) and no email yet');
+});
+
+test('email-only: step 2 sends one email with everything the customer typed', async () => {
+  const f = makeFetch();
+  const details = { facilityType: 'Office', restrooms: '2', frequency: 'Weekly', notes: 'Back door code at front desk.' };
+  const r2 = await inquiry(emailOnly(), f, details);
+  assert.equal(r2.status, 200);
+  const mails = resendCalls(f);
+  assert.equal(mails.length, 1);
+  const [mail] = mails;
   assert.equal(mail.subject, 'Website quote request: Smith Dental (Independence)');
   assert.deepEqual(mail.to, ['safeguardcleaningco@gmail.com']);
   assert.equal(mail.reply_to, 'dana@example.com');
   assert.match(mail.from, /Website/);
-  for (const v of ['Dana Smith', 'Smith Dental', 'dana@example.com', '(816) 555-0142', 'Independence', 'website']) assert.ok(mail.text.includes(v), `text has ${v}`);
+  for (const v of ['Dana Smith', 'Smith Dental', 'dana@example.com', '(816) 555-0142', 'Independence', 'Office', 'Weekly', 'Back door code', 'Google', 'website']) {
+    assert.ok(mail.text.includes(v), `text has ${v}`);
+  }
+  assert.ok(mail.html.includes('tel:+18165550142'), 'tap-to-call link');
+  assert.ok(mail.html.includes('mailto:dana@example.com'), 'email link');
+});
+
+test('email-only: skipping the details still sends the one email', async () => {
+  const f = makeFetch();
+  const r2 = await inquiry(emailOnly(), f, {});
+  assert.equal(r2.status, 200);
+  const mails = resendCalls(f);
+  assert.equal(mails.length, 1);
+  assert.ok(mails[0].text.includes('They skipped the optional details.'));
 });
 
 test('email-only: a failed email tells the visitor instead of pretending it worked', async () => {
   const f = makeFetch({ resendStatus: 500 });
-  const res = await handleQuote(req(good), emailOnly(), { fetch: f });
+  const res = await inquiry(emailOnly(), f);
   assert.equal(res.status, 502);
-});
-
-test('email-only: step 2 emails the details and repeats who they are from', async () => {
-  const f = makeFetch();
-  const { token } = await (await handleQuote(req(good), emailOnly(), { fetch: f })).json();
-  const details = { facilityType: 'Office', restrooms: '2', frequency: 'Weekly', notes: 'Back door code at front desk.' };
-  const r2 = await handleQuote(req({ step: 2, token, details }), emailOnly(), { fetch: f });
-  assert.equal(r2.status, 200);
-  const mail = resendCalls(f)[1];
-  assert.equal(mail.subject, 'Website quote request, more details: Smith Dental (Independence)');
-  assert.equal(mail.reply_to, 'dana@example.com');
-  for (const v of ['Office', 'Weekly', 'Back door code', 'Dana Smith', '(816) 555-0142']) assert.ok(mail.text.includes(v), `text has ${v}`);
-});
-
-test('email-only: step 2 with nothing filled in sends no second email', async () => {
-  const f = makeFetch();
-  const { token } = await (await handleQuote(req(good), emailOnly(), { fetch: f })).json();
-  const r2 = await handleQuote(req({ step: 2, token, details: {} }), emailOnly(), { fetch: f });
-  assert.equal(r2.status, 200);
-  assert.equal(resendCalls(f).length, 1);
 });
 
 test('email-only: a changed, foreign or expired step-2 token is refused', async () => {
@@ -293,9 +321,9 @@ test('email-only: a changed, foreign or expired step-2 token is refused', async 
   const forged = body.slice(0, -2) + (body.endsWith('AA') ? 'BB' : 'AA') + '.' + sig;
   assert.equal((await handleQuote(req({ step: 2, token: forged, details: { notes: 'x' } }), emailOnly(), { fetch: f })).status, 404);
   assert.equal((await handleQuote(req({ step: 2, token, details: { notes: 'x' } }), emailOnly({ RESEND_API_KEY: 'other' }), { fetch: f })).status, 404, 'signed with another key');
-  const old = await signToken({ name: 'A', businessName: 'B', email: 'a@b.co', phone: '1', city: 'C' }, emailOnly(), Date.now() - 48 * 3600 * 1000);
-  assert.equal((await handleQuote(req({ step: 2, token: old, details: { notes: 'x' } }), emailOnly(), { fetch: f })).status, 404, 'expired after 24 hours');
-  assert.equal(resendCalls(f).length, 1, 'no email for any refused token');
+  const old = await signToken({ name: 'A', businessName: 'B', email: 'a@b.co', phone: '1', city: 'C' }, emailOnly(), Date.now() - 3 * 3600 * 1000);
+  assert.equal((await handleQuote(req({ step: 2, token: old, details: { notes: 'x' } }), emailOnly(), { fetch: f })).status, 404, 'expired after 2 hours');
+  assert.equal(resendCalls(f).length, 0, 'no email for any refused token');
 });
 
 test('email-only: the spam trap still stops bots', async () => {

@@ -141,32 +141,56 @@
     });
   });
 
-  // ----- Step 2 submit / skip -----
+  // ----- Step 2: sends the one email to the team, with or without the optional details -----
   var alert2 = document.getElementById('step2-alert');
+  var sent = false; // set once the request has gone out, so it is never sent twice
   function finish() {
     step2.hidden = true;
     done.hidden = false;
     document.getElementById('form-h3').focus();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  step2.addEventListener('submit', function (e) {
-    e.preventDefault();
-    alert2.textContent = '';
-    var details = {
+  function details(includeOptional) {
+    if (!includeOptional) return {};
+    return {
       facilityType: val('facilityType'), sizeRange: val('sizeRange'), restrooms: val('restrooms'),
       frequency: val('frequency'), startDate: val('startDate'), heardAbout: val('heardAbout'), notes: val('notes')
     };
-    var anything = Object.keys(details).some(function (k) { return details[k]; });
-    if (!anything || !leadToken) { finish(); return; }
-    busy(step2, true, 'Sending…');
-    post({ step: 2, token: leadToken, details: details }).then(function (r) {
-      busy(step2, false);
-      if (r.status === 200 && r.data.ok) { finish(); return; }
-      alert2.textContent = 'Sorry, we couldn\'t save those details. Your request is already in, so you can skip this step.';
+  }
+  function send(includeOptional, button) {
+    alert2.textContent = '';
+    if (sent) { finish(); return; }
+    if (!leadToken) { finish(); return; } // spam trap path: nothing to send
+    sent = true;
+    var btns = step2.querySelectorAll('button');
+    btns.forEach(function (b) { b.disabled = true; });
+    var label = button.textContent;
+    button.textContent = 'Sending…';
+    function restore() { sent = false; btns.forEach(function (b) { b.disabled = false; }); button.textContent = label; }
+    post({ step: 2, token: leadToken, details: details(includeOptional) }).then(function (r) {
+      if (r.status === 200 && r.data.ok) { button.textContent = label; finish(); return; }
+      restore();
+      if (r.status === 404) {
+        alert2.textContent = 'Sorry, this form timed out. Please reload the page and send it again.' + FALLBACK;
+        return;
+      }
+      alert2.textContent = 'Sorry, something went wrong sending your request. Please try again.' + FALLBACK;
     }).catch(function () {
-      busy(step2, false);
-      alert2.textContent = 'We couldn\'t reach our server. Your request is already in, so you can skip this step.';
+      restore();
+      alert2.textContent = 'We couldn\'t reach our server. Please check your connection and try again.' + FALLBACK;
     });
+  }
+  step2.addEventListener('submit', function (e) {
+    e.preventDefault();
+    send(true, step2.querySelector('[data-submit]'));
   });
-  step2.querySelector('[data-skip]').addEventListener('click', finish);
+  step2.querySelector('[data-skip]').addEventListener('click', function (e) {
+    send(false, e.currentTarget);
+  });
+  // Closing or leaving the page on step 2 still sends the request, with whatever was filled in.
+  window.addEventListener('pagehide', function () {
+    if (sent || !leadToken || step2.hidden || !navigator.sendBeacon) return;
+    var body = JSON.stringify({ step: 2, token: leadToken, details: details(true) });
+    if (navigator.sendBeacon('/api/quote', new Blob([body], { type: 'application/json' }))) sent = true;
+  });
 })();
