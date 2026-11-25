@@ -1,5 +1,5 @@
 @echo off
-title Safeguard Cleaning - local preview
+title SafeGuard Cleaning Co - local preview
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (

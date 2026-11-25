@@ -1,4 +1,4 @@
--- Safeguard Cleaning — database tables (Cloudflare D1 / SQLite).
+-- SafeGuard Cleaning Co — database tables (Cloudflare D1 / SQLite).
 -- Run once in the Cloudflare dashboard: Storage & Databases > D1 > safeguard-leads > Console.
 
 CREATE TABLE IF NOT EXISTS leads (

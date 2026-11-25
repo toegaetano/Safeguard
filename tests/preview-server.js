@@ -67,7 +67,7 @@ const server = createServer(async (req, res) => {
 });
 const port = Number(process.env.PORT || 8788);
 server.listen(port, () => {
-  console.log(`\nSafeguard Cleaning preview is running at http://localhost:${port}`);
+  console.log(`\nSafeGuard Cleaning Co preview is running at http://localhost:${port}`);
   console.log(FULL ? 'Full setup: database + spam check (simulated).' : 'Email-only setup, like the live site.');
   console.log('Emails print here instead of being sent.');
   console.log('Saved requests: http://localhost:' + port + '/api/leads');

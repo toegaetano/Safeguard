@@ -1,4 +1,4 @@
-// Safeguard Cleaning — quote form. Two steps: required contact details, then optional details.
+// SafeGuard Cleaning Co — quote form. Two steps: required contact details, then optional details.
 // Sends to /api/quote (functions/api/quote.js). Spam check: a hidden trap field, plus Cloudflare Turnstile
 // when it is set up (/api/config says so).
 (function () {

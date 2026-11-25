@@ -1,3 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+
+Sitemap: https://safeguard-cleaning.pages.dev/sitemap.xml

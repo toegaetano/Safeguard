@@ -1,4 +1,4 @@
-// Safeguard Cleaning — shared page behaviour: footer year and lead-source tracking.
+// SafeGuard Cleaning Co — shared page behaviour: footer year and lead-source tracking.
 // The menu, hover and motion come from the design kit in /assets (system.js, motion.js).
 (function () {
   'use strict';
