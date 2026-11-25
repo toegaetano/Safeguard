@@ -93,7 +93,7 @@ Two free Google accounts do two different jobs. Sign in to both with **safeguard
 ### A. Google Business Profile (about 20 minutes, then verification)
 1. Go to **business.google.com** → **Manage now**.
 2. **Business name:** your real name exactly as customers see it (logo, invoices, email). No extra words like "Best Commercial Cleaning KC". Google suspends profiles that stuff keywords into the name.
-3. **Category:** `Commercial cleaning service`. You can add extra categories later (for example `Janitorial service`), but only ones that are true.
+3. **Category:** type `Janitorial` and pick **Janitorial service**. Once the profile is set up, add extra categories if Google offers them (for example `Office cleaning service` or `Commercial cleaning service`). Never pick `House cleaning service` or `Maid service`: those are for home cleaning.
 4. **"Do you want to add a location customers can visit?"** → **No.** You go to your customers, so you're a "service-area business." Your address stays hidden from the public.
 5. **Service areas:** add Kansas City MO, Kansas City KS, Overland Park KS, Blue Springs MO, Independence MO, Lee's Summit MO, Olathe KS, and other metro cities you'll actually drive to (up to 20).
 6. **Contact:** phone is optional, so leave it blank (it's on hold). **Website:** `https://safeguard-cleaning.pages.dev/`
@@ -106,8 +106,8 @@ Two free Google accounts do two different jobs. Sign in to both with **safeguard
    - **Photos:** your logo, plus **real** photos of your team at work or spaces you've cleaned (no faces without consent). Don't use stock photos here. Google wants real ones, and they help ranking.
    - **Booking / quote link:** `https://safeguard-cleaning.pages.dev/quote.html`
 
-**Description to paste:**
-> SafeGuard Cleaning Co provides commercial cleaning for businesses across the Kansas City metro and Overland Park, KS. Instead of fixed packages, we walk through your building with you and build a cleaning plan around what actually needs to be cleaned. Free walkthrough and free quote. New customers get a discount on their first clean, and a percentage of every job goes to charity. Based in Blue Springs, MO. We clean businesses only.
+**Description to paste** (Google allows 750 characters and doesn't allow offers or prices in it, so the first-clean discount stays on the website):
+> SafeGuard Cleaning Co is a commercial cleaning company based in Blue Springs, MO, serving businesses across the Kansas City metro and Overland Park, KS. We don't sell one-size-fits-all packages. We walk through your space with you, learn what actually needs cleaning, and build a cleaning plan around your building and your needs. We clean offices, retail stores, medical offices, gyms, churches, restaurants, warehouses and other commercial spaces. A percentage of every job goes to charity. We clean businesses only, not homes. Request a free walkthrough and quote through our website.
 
 **Reviews:** reviews on this profile matter more than anything else for showing up in Maps. After a job goes well, send the customer your review link (in the profile: **Ask for reviews**). Don't offer discounts or gifts for reviews, and don't write your own. Both break Google's rules and can get the profile removed. Reply to every review, good or bad.
 
